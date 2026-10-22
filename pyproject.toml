@@ -1,0 +1,25 @@
+[project]
+name = "fabric-snapshot"
+version = "0.1.0"
+description = "Before/after snapshot of a Fabric workspace: tables, schemas, row counts, items - and the diff in one line"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Gustav Kruse" }]
+dependencies = []
+keywords = ["microsoft-fabric", "audit", "agents", "snapshot", "data-engineering"]
+
+[project.optional-dependencies]
+rest = ["requests"]
+sql = ["pyodbc"]
+test = ["pytest"]
+
+[project.scripts]
+fabric-snapshot = "fabric_snapshot.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["fabric_snapshot*"]
