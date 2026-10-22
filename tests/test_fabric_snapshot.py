@@ -84,8 +84,8 @@ def test_collect_sql_with_fake_execute():
         raise AssertionError(sql)
 
     snap = take(execute=execute, database="wh", schema="dbo", count=True)
-    assert snap.tables["/wh/dbo/orders"].columns == (("order_id", "int"), ("total", "decimal"))
-    assert snap.tables["/wh/dbo/orders"].row_count == 42 and snap.tables["/wh/dbo/dim"].row_count == 3
+    assert snap.tables["wh/dbo/orders"].columns == (("order_id", "int"), ("total", "decimal"))
+    assert snap.tables["wh/dbo/orders"].row_count == 42 and snap.tables["wh/dbo/dim"].row_count == 3
     assert "2 tables" in snap.summary()
 
 
@@ -98,3 +98,31 @@ def test_cli_diff_exit_codes(tmp_path, before):
     assert main(["diff", str(b), str(a), "--protect", "*_prod", "--markdown", str(tmp_path / "d.md")]) == 2
     assert "CHANGED" in (tmp_path / "d.md").read_text()
     assert main(["diff", str(b), str(b)]) == 0
+
+
+def test_collect_spark_keys_schema_and_lakehouse():
+    """Schema-enabled lakehouse: each schema is a Spark database; the key must read lakehouse/schema/table."""
+    from fabric_snapshot.collect import collect_spark
+    from fabric_snapshot import Snapshot
+    import types
+
+    class Cat:
+        def listTables(self, db):
+            return [types.SimpleNamespace(name="addresses", tableType="MANAGED")] if db == "shop" else []
+        def listColumns(self, name, db):
+            return [types.SimpleNamespace(name="address_id", dataType="int")]
+        def currentDatabase(self):
+            return "4f3c-internal-name"
+
+    class Spark:
+        catalog = Cat()
+        def sql(self, q):
+            raise RuntimeError("not delta")
+        def table(self, full):
+            return types.SimpleNamespace(count=lambda: 5)
+
+    snap = Snapshot("t")
+    collect_spark(snap, Spark(), ["shop"], lakehouse="lh_sales", count=True)
+    assert list(snap.tables) == ["lh_sales/shop/addresses"]
+    assert snap.tables["lh_sales/shop/addresses"].last_modified is None and snap.tables["lh_sales/shop/addresses"].row_count == 5
+    assert "4f3c" not in list(snap.tables)[0]

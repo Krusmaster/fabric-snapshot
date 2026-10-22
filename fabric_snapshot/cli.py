@@ -1,6 +1,7 @@
 """fabric-snapshot CLI.
 
   fabric-snapshot take --out before.json --odbc "<conn>" --database wh --schema dbo [--count]
+  (in a notebook: fs.take(spark=spark, schemas=["dbo","shop"], lakehouse="lh_sales"))
   fabric-snapshot take --out before.json --workspaces <ws1>,<ws2>            (items only; token via az login)
   fabric-snapshot diff before.json after.json [--protect "*_prod" --protect "dim_*"] [--markdown out.md]
      exit 0 = clean, 1 = changes, 2 = a protected table changed

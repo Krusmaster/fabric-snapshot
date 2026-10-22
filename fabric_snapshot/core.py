@@ -33,7 +33,8 @@ class TableState:
 
     @property
     def key(self) -> str:
-        return f"{self.workspace}/{self.database}/{self.schema}/{self.table}"
+        parts = [self.workspace, self.database, self.schema, self.table]
+        return "/".join(p for p in parts if p)          # no leading slash when no workspace label
 
     @property
     def schema_hash(self) -> str:
@@ -56,7 +57,8 @@ class Snapshot:
 
     @property
     def workspaces(self) -> set[str]:
-        return {t.workspace for t in self.tables.values()} | {i["workspace"] for i in self.items.values()}
+        ws = {t.workspace for t in self.tables.values()} | {i["workspace"] for i in self.items.values()}
+        return {w for w in ws if w} or ({""} if self.tables or self.items else set())
 
     def summary(self) -> str:
         return f"{len(self.workspaces)} workspaces, {len(self.items)} items, {len(self.tables)} tables ({self.taken_at})"

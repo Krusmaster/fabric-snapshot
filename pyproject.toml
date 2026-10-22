@@ -1,6 +1,6 @@
 [project]
 name = "fabric-snapshot"
-version = "0.1.0"
+version = "0.1.1"
 description = "Before/after snapshot of a Fabric workspace: tables, schemas, row counts, items - and the diff in one line"
 readme = "README.md"
 license = { text = "MIT" }

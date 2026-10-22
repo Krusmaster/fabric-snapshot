@@ -1,12 +1,14 @@
 """Collectors: fill a Snapshot from Spark, from a SQL connection, or from the Fabric REST API.
 
-    snap = take(spark=spark, databases=["lh_sales", "lh_stock"], count=True)      # inside a Fabric notebook
+    snap = take(spark=spark, schemas=["dbo", "shop"], lakehouse="lh_sales", count=True)   # inside a Fabric notebook
     snap = take(execute=run_sql, database="wh_main", schema="dbo", count=True)   # any DB-API / SQL endpoint
     snap = take(workspaces=["<ws id>", ...], token=token)                         # item inventory only, no tables
 
 They compose: take(spark=..., workspaces=[...], token=...) gives tables + items in one snapshot.
-Row counts are a full COUNT(*) per table — on a big lakehouse that is the slow part; count=False
-keeps columns + last_modified, which already catches schema drift and every Delta write.
+Row counts are a full COUNT(*) per table — on a big lakehouse that is the slow part (13 s for 9
+small tables warm, 5 s without); count=False keeps columns + last_modified, which already catches
+schema drift and every Delta write. Parquet tables report no last_modified: only the row count sees
+a change there.
 """
 from __future__ import annotations
 
@@ -15,13 +17,17 @@ from .core import Snapshot, TableState
 FABRIC = "https://api.fabric.microsoft.com"
 
 
-def take(spark=None, databases: list[str] | None = None, execute=None, database: str | None = None,
-         schema: str = "dbo", workspaces: list[str] | None = None, token: str | None = None,
-         workspace_label: str = "", count: bool = False) -> Snapshot:
-    snap = Snapshot(Snapshot.now(), scope={"databases": databases, "database": database, "schema": schema,
-                                           "workspaces": workspaces, "count": count})
+def take(spark=None, schemas: list[str] | None = None, lakehouse: str = "lakehouse", execute=None,
+         database: str | None = None, schema: str = "dbo", workspaces: list[str] | None = None,
+         token: str | None = None, workspace_label: str = "", count: bool = False,
+         databases: list[str] | None = None) -> Snapshot:
+    """spark=: schemas= are the lakehouse's schemas (["dbo", "shop"]; on a schema-enabled lakehouse each is a Spark
+    database); lakehouse= is the name that goes into the key. `databases=` is the old spelling of schemas=."""
+    schemas = schemas or databases
+    snap = Snapshot(Snapshot.now(), scope={"schemas": schemas, "lakehouse": lakehouse, "database": database,
+                                           "schema": schema, "workspaces": workspaces, "count": count})
     if spark is not None:
-        collect_spark(snap, spark, databases, count=count, workspace=workspace_label)
+        collect_spark(snap, spark, schemas, lakehouse=lakehouse, count=count, workspace=workspace_label)
     if execute is not None:
         collect_sql(snap, execute, database or "db", schema, count=count, workspace=workspace_label)
     if workspaces:
@@ -31,9 +37,11 @@ def take(spark=None, databases: list[str] | None = None, execute=None, database:
     return snap
 
 
-def collect_spark(snap: Snapshot, spark, databases: list[str] | None = None, count: bool = False,
-                  workspace: str = "") -> None:
-    dbs = databases or [spark.catalog.currentDatabase()]
+def collect_spark(snap: Snapshot, spark, schemas: list[str] | None = None, lakehouse: str = "lakehouse",
+                  count: bool = False, workspace: str = "") -> None:
+    """schemas: ["dbo", "shop"] — the schema name is what listTables wants on a schema-enabled lakehouse; two- and
+    three-part names fail. currentDatabase() returns an internal name there, so it never goes into a key."""
+    dbs = schemas or ["dbo"]
     for db in dbs:
         for t in spark.catalog.listTables(db):
             if t.tableType and t.tableType.upper() == "TEMPORARY":
@@ -48,7 +56,7 @@ def collect_spark(snap: Snapshot, spark, databases: list[str] | None = None, cou
             except Exception:
                 pass
             n = spark.table(full).count() if count else None
-            snap.add(TableState(workspace, db, "dbo", t.name, cols, n, last))
+            snap.add(TableState(workspace, lakehouse, db, t.name, cols, n, last))
 
 
 COLUMNS_SQL = """SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION

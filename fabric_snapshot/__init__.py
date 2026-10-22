@@ -3,4 +3,4 @@ from .core import Snapshot, TableState, Diff, Change, diff
 from .collect import take
 
 __all__ = ["Snapshot", "TableState", "Diff", "Change", "diff", "take"]
-__version__ = "0.1.0"
+__version__ = "0.1.1"

@@ -18,12 +18,12 @@ you mark as *protected* get their own line.
 ```python
 import fabric_snapshot as fs
 
-before = fs.take(spark=spark, databases=["lh_sales", "lh_stock"], count=True)
+before = fs.take(spark=spark, schemas=["dbo", "shop"], lakehouse="lh_sales", count=True)
 before.save("Files/snapshots/before.json")
 
 # ... the agent runs, the migration runs, the night passes ...
 
-after = fs.take(spark=spark, databases=["lh_sales", "lh_stock"], count=True)
+after = fs.take(spark=spark, schemas=["dbo", "shop"], lakehouse="lh_sales", count=True)
 d = fs.diff(before, after, protect=["*_prod", "dim_*"])
 print(d.summary())
 ```
@@ -41,13 +41,14 @@ a pipeline gate.
 
 | You have | Call |
 | --- | --- |
-| A Fabric notebook | `fs.take(spark=spark, databases=[...], count=True)` — columns, Delta `lastModified`, optional COUNT(*) |
+| A Fabric notebook | `fs.take(spark=spark, schemas=["dbo", "shop"], lakehouse="lh_sales", count=True)` — columns, Delta `lastModified`, optional COUNT(*). On a schema-enabled lakehouse each schema is a Spark database; pass the schema names, not `lakehouse.schema` |
 | A SQL connection (endpoint, warehouse, SQL database) | `fs.take(execute=run_sql, database="wh", schema="dbo", count=True)` |
 | Just the item inventory | `fs.take(workspaces=["<ws id>"], token=token)` — needs `requests`, `pip install fabric-snapshot[rest]` |
 
 They compose: `take(spark=..., workspaces=[...], token=...)` is tables and items in one snapshot.
-`count=True` is a full `COUNT(*)` per table and is the slow part; without it you still catch every
-schema change and, on Delta, every write.
+`count=True` is a full `COUNT(*)` per table and is the slow part (13 s for 9 small tables in a warm
+session, 5 s without); without it you still catch every schema change and, on Delta, every write.
+Parquet tables carry no last-modified, so only the row count sees a change there.
 
 ## CLI
 
@@ -72,9 +73,11 @@ row to one table: the diff must name that table and nothing else.
 
 ## Status
 
-v0.1.0. Core and diff are tested on fixtures; the SQL collector is tested with a fake connection.
-Spark and REST collectors follow the catalog and item APIs and are **not yet run in a Fabric
-workspace** — issue #1, and the status line changes when they have been.
+v0.1.1 ran in a Fabric sandbox on a schema-enabled lakehouse (2026-10-22, [issue #1](https://github.com/Krusmaster/fabric-snapshot/issues/1)):
+schemas passed as `schemas=`, a quiet ten seconds diffs empty, a one-row append names that table
+alone (+1), a created item shows in `items_added`. Delta tables carry last-modified; parquet
+tables only row counts. Shortcuts not yet run. The first run also found that keys were written as
+schema/dbo/table — fixed in v0.1.1.
 
 ## Works on
 
